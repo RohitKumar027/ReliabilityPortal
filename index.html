@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reliability Dashboard</title>
+<base href="https://o365vguard.sharepoint.com/sites/PortalReliability/Shared%20Documents/Dashboard/">
+
+<!-- Add these libraries for document generation - FIXED LOADING ORDER -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<!-- DOCX library with correct CDN -->
+<script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<!-- JSZip for ZIP file creation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+
+
+<link href="styles.css" rel="stylesheet"/></head>
+<body>
+<div class="container">
+<div class="header">
+<h1>Reliability Dashboard</h1>
+<div class="shift-indicator">
+<span>Current Shift: <span class="current-shift" id="currentShift">-</span></span>
+<span>Time Remaining: <span id="shiftTimeRemaining">-</span></span>
+</div>
+</div>
+<div class="tabs">
+<button class="tab active" onclick="switchTab('planning')">Planning</button>
+<button class="tab" onclick="switchTab('progress')">Current Progress</button>
+<button class="tab" onclick="switchTab('testing')">Test Results</button>
+<button class="tab" onclick="switchTab('config')">Test Configuration</button>
+<button class="tab" onclick="switchTab('resources')">Lab Resources</button>
+<button class="tab" onclick="switchTab('lifecycle')">Life Cycle Testing</button>
+</div>
+<!-- Planning Tab -->
+<div class="tab-content active" id="planning">
+<div class="grid">
+<div class="metric-card" onclick="showMachineDetails()">
+<div class="metric-label">Machine Utilization</div>
+<div class="metric-value" id="machineUtilization">0%</div>
+<div class="progress-bar">
+<div class="progress-fill" id="utilizationBar" style="width: 0%"></div>
+</div>
+<div class="metric-sublabel">Click for details</div>
+</div>
+<div class="metric-card" onclick="showManDetails()">
+<div class="metric-label">Man Utilization</div>
+<div class="metric-value" id="manUtilization">0%</div>
+<div class="progress-bar">
+<div class="progress-fill" id="manUtilizationBar" style="width: 0%"></div>
+</div>
+<div class="metric-sublabel" id="manUtilizationDetail">0/0 technicians busy</div>
+</div>
+<div class="metric-card" onclick="showActiveProducts()">
+<div class="metric-label">Products Under Test</div>
+<div class="metric-value" id="activeProducts">0</div>
+<div class="metric-sublabel">Currently testing</div>
+</div>
+<div class="metric-card" onclick="showLeadTimeDetails()">
+    <div class="metric-label">Current Lead Time</div>
+    <div class="metric-value" id="currentLeadTime">0d 0h 0m</div>
+    <div class="metric-sublabel">Est. completion</div>
+</div>
+<div class="metric-card">
+<div class="metric-label">Lab Capacity</div>
+<div class="metric-value" id="labCapacity">Normal</div>
+<div class="metric-sublabel" id="capacityMessage">Operating within limits</div>
+</div>
+<div class="metric-card" onclick="showProductStats()">
+<div class="metric-label">Total SKUs Received</div>
+<div class="metric-value" id="totalReceived">0</div>
+<div class="metric-sublabel">Click for breakdown</div>
+</div>
+<div class="metric-card" onclick="showCompletedStats()">
+<div class="metric-label">Products Passed</div>
+<div class="metric-value" id="completedPass">0</div>
+<div class="metric-sublabel">All tests passed</div>
+</div>
+<div class="metric-card" onclick="showFailedStats()">
+<div class="metric-label">NC (Non Conformity)</div>
+<div class="metric-value" id="failedTests">0</div>
+<div class="metric-sublabel">Products with NC</div>
+</div>
+<div class="metric-card" onclick="showOnTimeDetails()">
+    <div class="metric-label">On-Time Delivery</div>
+    <div class="metric-value" id="onTimePercentage">NA</div>
+    <div class="metric-sublabel" id="onTimeDetail">No products completed</div>
+</div>
+<div class="metric-card">
+    <div class="metric-label">Power Consumption</div>
+    <div class="metric-value" id="totalPowerConsumption">0.0 kW</div>
+    <div class="metric-sublabel" id="powerConsumptionDetail">No active tests</div>
+</div>
+</div>
+<div class="card">
+<h3>📋 Add New Testing Request</h3>
+<div class="form-grid">
+<div>
+<label>Product Type</label>
+<select id="productType" onchange="updatePreview()">
+<option value="">Select Product</option>
+</select>
+<div class="manage-categories">
+<input id="newCategory" placeholder="New category name" type="text"/>
+<div class="button-group">
+<button class="btn-secondary" onclick="event.stopPropagation(); addProductCategory();" type="button">Add</button>
+<button class="btn-danger" onclick="event.stopPropagation(); removeProductCategory();" type="button">Remove</button>
+</div>
+</div>
+</div>
+<div>
+<label>Product Classification</label>
+<select id="productClass" onchange="updatePreview()">
+<option value="">Select Classification</option>
+<option value="NP">NP - New Product</option>
+<option value="RP">RP - Running Product</option>
+<option value="ECN">ECN - Engineer Change Note</option>
+</select>
+</div>
+<div>
+<label>Test Type</label>
+<select id="testType" onchange="updatePreview()">
+<option value="">Select Test Type</option>
+<option value="BIS">BIS Standard Test</option>
+<option value="REL">Reliability Test</option>
+</select>
+</div>
+<div>
+<label>Number of SKUs</label>
+<input id="numSKUs" min="1" onchange="updatePreview()" type="number" value="1"/>
+</div>
+<div>
+<label>Number of Samples per SKU</label>
+<input id="numSamples" min="1" onchange="updatePreview()" type="number" value="1"/>
+</div>
+</div>
+<div class="preview-section" id="previewSection" style="display: none;">
+<h4>📊 Impact Analysis</h4>
+<div class="grid">
+<div>
+<strong>Power Consumption:</strong>
+<span id="previewPower">0 kW</span>
+</div>
+<div>
+<strong>Lead Time:</strong>
+<span id="previewLeadTime">0 hours</span>
+</div>
+<div>
+<strong>Completion Date:</strong>
+<span id="previewCompletion">-</span>
+</div>
+<div>
+<strong>Lab Status:</strong>
+<span id="previewStatus">Normal</span>
+</div>
+</div>
+<div id="capacityDetails"></div>
+<div id="machineQueuePreview"></div>
+</div>
+<button onclick="submitProductRequest()" style="margin-top: 20px">Submit Request</button>
+</div>
+<div class="card" id="skuNamesSection" style="display: none;">
+<h3>📝 Enter SKU Model Names</h3>
+<div id="skuNamesContainer"></div>
+<button class="btn-success" onclick="confirmSKUNames()" style="margin-top: 20px">Confirm Model Names</button>
+</div>
+<div class="card" id="sampleConfigSection" style="display: none;">
+<h3>🔧 Configure Test Details</h3>
+<div id="sampleConfigContainer"></div>
+<button class="btn-success" onclick="confirmTestConfiguration()" style="margin-top: 20px">Confirm Configuration</button>
+</div>
+</div>
+<!-- Current Progress Tab -->
+<div class="tab-content" id="progress">
+<div class="card">
+<h3>📈 Testing Timeline</h3>
+<div class="timeline" id="testingTimeline">
+<div class="timeline-container" id="timelineContainer">
+<!-- Timeline items will be populated here -->
+</div>
+</div>
+</div>
+<div class="card">
+<h3>📊 Active Tests</h3>
+<div class="active-tests-grid" id="activeTestsContainer">
+<!-- Active test cards will be populated here -->
+</div>
+</div>
+</div>
+<!-- Test Results Tab -->
+<div class="tab-content" id="testing">
+<div class="card">
+<h3>📝 Update Test Results</h3>
+<div class="form-grid">
+<div>
+<label>Select Test</label>
+<select id="testToUpdate">
+<option value="">Select a test to update</option>
+</select>
+</div>
+<div>
+<label>Test Result</label>
+<select id="testResult" onchange="handleTestResultChange()">
+<option value="">Select Result</option>
+<option value="pass">Pass</option>
+<option value="fail">Fail</option>
+</select>
+</div>
+</div>
+<!-- NC/Observation section for Pass -->
+<div class="nc-observation-section" id="ncObservationSection">
+<label>Any NC/Observation?</label>
+<select id="hasNcObservation" onchange="handleNcObservationChange()">
+<option value="">Select</option>
+<option value="no">No</option>
+<option value="yes">Yes</option>
+</select>
+</div>
+<!-- NC Type section -->
+<div class="nc-type-section" id="ncTypeSection">
+<label>NC/Observation Type</label>
+<select id="ncType">
+<option value="">Select Type</option>
+<option value="Design-Critical">Design-Critical</option>
+<option value="Design-Major">Design-Major</option>
+<option value="Design-Minor">Design-Minor</option>
+<option value="Process-Critical">Process-Critical</option>
+<option value="Process-Major">Process-Major</option>
+<option value="Process-Minor">Process-Minor</option>
+<option value="Transport-Critical">Transport-Critical</option>
+<option value="Transport-Major">Transport-Major</option>
+<option value="Transport-Minor">Transport-Minor</option>
+<option value="Other-Critical">Other-Critical</option>
+<option value="Other-Major">Other-Major</option>
+<option value="Other-Minor">Other-Minor</option>
+</select>
+</div>
+<div style="margin-top: 15px;">
+<label>Remarks (Required)</label>
+<textarea id="testRemarks" placeholder="Enter observations or failure reasons..." required="" rows="3"></textarea>
+</div>
+<!-- File upload section for before/after photos/videos -->
+<div class="file-upload-wrapper">
+<label class="file-upload-label">Before Test Photos/Videos (Required)</label>
+<input accept="image/*,video/*" id="beforeTestFiles" multiple="" onchange="handleFileSelect('before')" type="file"/>
+<div class="file-preview" id="beforeFilePreview"></div>
+</div>
+<div class="file-upload-wrapper">
+<label class="file-upload-label">After Test Photos/Videos (Required)</label>
+<input accept="image/*,video/*" id="afterTestFiles" multiple="" onchange="handleFileSelect('after')" type="file"/>
+<div class="file-preview" id="afterFilePreview"></div>
+</div>
+<button class="btn-success" onclick="updateTestResult()" style="margin-top: 15px">Update Result</button>
+</div>
+</div>
+<!-- Test Configuration Tab -->
+<div class="tab-content" id="config">
+<div class="card">
+<h3>⚙️ Test Configuration</h3>
+<p style="margin-bottom: 20px; color: #ccc;">Configure test parameters for each product category</p>
+<div class="form-grid">
+<div>
+<label>Product Category</label>
+<select id="configCategory">
+<option value="">Select Category</option>
+</select>
+</div>
+<div>
+<label>Test Name</label>
+<input id="testName" placeholder="e.g., Thermal Cycling" type="text"/>
+</div>
+<div>
+<label>Cycle Time</label>
+<div class="time-input-group">
+<input id="cycleHours" min="0" placeholder="0" type="number"/>
+<span>hrs</span>
+<input id="cycleMinutes" max="59" min="0" placeholder="0" type="number"/>
+<span>min</span>
+</div>
+</div>
+<div>
+<label>Man Hours Required</label>
+<div class="time-input-group">
+<input id="manHours" min="0" placeholder="0" type="number"/>
+<span>hrs</span>
+<input id="manMinutes" max="59" min="0" placeholder="0" type="number"/>
+<span>min</span>
+</div>
+</div>
+<div>
+<label>Required Machines</label>
+<div class="machine-selection" id="selectedMachines"></div>
+<button class="btn-secondary" onclick="openMachineSelector()" style="margin-top: 10px;">
+                            Select Machines
+                        </button>
+</div>
+<div>
+<label>Power Consumption (kW)</label>
+<input id="powerConsumption" min="0" placeholder="5.5" step="0.1" type="number"/>
+</div>
+<div>
+<label>Technicians Required</label>
+<input id="techRequired" min="1" type="number" value="1"/>
+</div>
+</div>
+<!-- Test Specification Sets Section -->
+<div class="spec-input-group">
+<h4 style="color: #ffd700; margin-bottom: 10px;">Test Specification Sets</h4>
+<div id="testSpecificationSets"></div>
+<button class="btn-secondary" onclick="addSpecificationSet()" style="margin-top: 10px;">Add New Specification Set</button>
+</div>
+<!-- Test Procedure Section -->
+<div class="procedure-editor">
+<label>Test Procedure</label>
+<textarea id="testProcedure" placeholder="Enter detailed test procedure steps..."></textarea>
+</div>
+<button onclick="addTestConfig()" style="margin-top: 15px">Add Test Configuration</button>
+<table style="margin-top: 30px">
+<thead>
+<tr>
+<th>Product</th>
+<th>Test Name</th>
+<th>Cycle Time</th>
+<th>Man Hours</th>
+<th>Required Machines</th>
+<th>Power (kW)</th>
+<th>Technicians</th>
+<th>Specification Sets</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="testConfigBody">
+</tbody>
+</table>
+</div>
+</div>
+<!-- Lab Resources Tab -->
+<div class="tab-content" id="resources">
+<div class="card">
+<h3>🏭 Machine Inventory</h3>
+<div class="form-grid">
+<div>
+<label>Machine Name</label>
+<input id="machineName" placeholder="e.g., Thermal Chamber, Custom Tester" type="text"/>
+</div>
+<div>
+<label>Machine ID</label>
+<input id="machineId" placeholder="e.g., TC-001" type="text"/>
+</div>
+</div>
+<button onclick="addMachine()" style="margin-top: 15px">Add Machine</button>
+<table style="margin-top: 30px">
+<thead>
+<tr>
+<th>Machine Name</th>
+<th>Machine ID</th>
+<th>Status</th>
+<th>Queue</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="machineInventoryBody">
+</tbody>
+</table>
+</div>
+<div class="card">
+<h3>👥 Technician Team</h3>
+<div class="form-grid">
+<div>
+<label>Technician Name</label>
+<input id="technicianName" placeholder="Enter name" type="text"/>
+</div>
+<div>
+<label>Employee ID</label>
+<input id="technicianId" placeholder="e.g., EMP001" type="text"/>
+</div>
+<div>
+<label>Shift</label>
+<select id="technicianShift">
+<option value="">Select Shift</option>
+<option value="shiftG">General Shift (9AM - 5:30PM)</option>
+<option value="shiftA">Shift A (6AM - 2PM)</option>
+<option value="shiftB">Shift B (2PM - 10PM)</option>
+<option value="shiftC">Shift C (10PM - 6AM)</option>
+</select>
+</div>
+</div>
+<button onclick="addTechnician()" style="margin-top: 15px">Add Technician</button>
+<table style="margin-top: 30px">
+<thead>
+<tr>
+<th>Name</th>
+<th>Employee ID</th>
+<th>Shift</th>
+<th>Workload</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="technicianTeamBody">
+</tbody>
+</table>
+</div>
+</div>
+<!-- Life Cycle Testing Tab -->
+<div class="tab-content" id="lifecycle">
+<div class="lifecycle-config">
+<h4 style="color: #ffd700; margin-bottom: 15px;">Life Cycle Configuration</h4>
+<div id="lifecycleConfigContainer">
+<!-- Life cycle config items will be added here -->
+</div>
+</div>
+<div class="card">
+<h3>⏰ Products in Life Cycle Testing</h3>
+<div id="lifecycleProducts">
+<!-- Life cycle products will be displayed here -->
+</div>
+</div>
+</div>
+</div>
+<!-- Modals -->
+<div class="modal" id="machineModal">
+<div class="modal-content">
+<div class="modal-header">
+<h3>Machine Utilization Details</h3>
+<button class="close-btn" onclick="closeMachineModal()">×</button>
+</div>
+<div id="machineDetailsContent"></div>
+</div>
+</div>
+<div class="modal" id="manModal">
+<div class="modal-content">
+<div class="modal-header">
+<h3>Man Utilization Details</h3>
+<button class="close-btn" onclick="closeManModal()">×</button>
+</div>
+<div id="manDetailsContentV2">
+<div id="manDetailsContent" style="display:none!important"></div>
+</div>
+</div>
+</div>
+<div class="modal" id="activeProductsModal">
+<div class="modal-content">
+<div class="modal-header">
+<h3>Products Under Test</h3>
+<button class="close-btn" onclick="closeActiveProductsModal()">×</button>
+</div>
+<div id="activeProductsContent"></div>
+</div>
+</div>
+<div class="modal" id="machineSelectorModal">
+<div class="modal-content">
+<div class="modal-header">
+<h3>Select Required Machines</h3>
+<button class="close-btn" onclick="closeMachineSelector()">×</button>
+</div>
+<div id="machineSelectorContent"></div>
+</div>
+</div>
+<div class="modal" id="productStatsModal">
+<div class="modal-content">
+<div class="modal-header">
+<h3>Product Statistics</h3>
+<button class="close-btn" onclick="closeProductStatsModal()">×</button>
+</div>
+<div id="productStatsContent"></div>
+</div>
+</div>
+<div class="modal" id="leadTimeModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Active Processes Lead Times</h3>
+            <button class="close-btn" onclick="closeLeadTimeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="leadTimeDetailsContent">
+                <!-- Will be populated by JavaScript -->
+                <p>Loading lead times...</p>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Export Button -->
+<button class="export-btn" onclick="exportToExcel()" title="Export to Excel">📊</button>
+
+<!-- Test Configuration Popup HTML -->
+<div class="test-config-popup" id="testConfigPopup" style="display: none;">
+<div class="test-config-popup-content">
+<button aria-label="Close" class="close-btn" onclick="closeTestConfigPopup(event)" type="button">×</button>
+<div class="test-config-details" id="testConfigDetails"></div>
+</div>
+</div>
+
+
+
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
